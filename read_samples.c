@@ -1,5 +1,6 @@
 /*
-Reads samples from the OS X default audio device, with minimal latency. It uses portaudio (http://portaudio.com) as a simplified audio I/O library.
+Reads samples from the OS X default audio device, with minimal latency. It uses
+portaudio (http://portaudio.com) as a simplified audio I/O library.
 */
 
 #include <math.h>
