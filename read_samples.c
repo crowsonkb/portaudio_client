@@ -3,45 +3,57 @@ Reads samples from the OS X default audio device, with minimal latency. It uses
 portaudio (http://portaudio.com) as a simplified audio I/O library.
 */
 
-#include <math.h>
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "portaudio.h"
+#include "zmq.h"
+
+static void *context = NULL;
+static void *publisher = NULL;  // Do not touch this outside callbacks.
+const char *endpoint = "tcp://*:5556";
 
 static int callback(const void *input_,
-                    void *output,
+                    void *output_,
                     unsigned long frameCount,
                     const PaStreamCallbackTimeInfo *timeInfo,
                     PaStreamCallbackFlags statusFlags,
                     void *userData_) {
 
-    //printf("\nHello from inside the callback!\n");
-    //printf("Frames per buffer: %lu\n", frameCount);
-    //printf("First sample of input at time: %f\n", timeInfo->inputBufferAdcTime);
-    //printf("Stream callback invoked at time: %f\n", timeInfo->currentTime);
-
     const float *input = input_;
-    int *count = userData_;
-    if (!*count) {
-        printf("\nReading %lu frames per callback...\n", frameCount);
+
+    int rc;
+    static int zmq_setup;
+    if (!zmq_setup) {
+        publisher = zmq_socket(context, ZMQ_PUB);
+        assert(publisher);
+        rc = zmq_bind(publisher, endpoint);
+        if (rc != 0) { goto error; }
+        zmq_setup = 1;
     }
 
-    double accum = 0;
-    for (int i = 0; i < frameCount; i++) {
-        accum += (double)input[i]*input[i];
-    }
-    printf("RMS of input buffer: % 3.2f dB\n", 20*log10(sqrt(accum/frameCount)));
+    size_t len = frameCount*sizeof(float)*1;
+    rc = zmq_send(publisher, input, len, 0);
+    if (rc != len) { goto error; }
 
-    if (*count >= 15) {
-        free(count);
-        return paComplete;
-    }
-    (*count)++;
     return paContinue;
+
+    error:
+    if (rc < 0) {
+        printf("ZMQ error: %s\n", zmq_strerror(zmq_errno()));
+    } else {
+        printf("An unknown error occurred (ZMQ rc: %d)", rc);
+    }
+    return paComplete;
 }
 
-PaError init_stream() {
+static void callback_done(void *userData) {
+    zmq_unbind(publisher, endpoint);
+    zmq_close(publisher);
+}
+
+PaError init_stream(PaStream **stream) {
     PaError err;
 
     PaDeviceIndex device = Pa_GetDefaultInputDevice();
@@ -54,18 +66,14 @@ PaError init_stream() {
     params.suggestedLatency = deviceInfo->defaultLowInputLatency;
     params.hostApiSpecificStreamInfo = NULL;
 
-    PaStream *stream;
-    err = Pa_OpenStream(&stream, &params, NULL, deviceInfo->defaultSampleRate,
-                        0, paClipOff, callback, calloc(1, sizeof(int)));
+    err = Pa_OpenStream(stream, &params, NULL, deviceInfo->defaultSampleRate,
+                        0, paClipOff, callback, NULL);
     if (err != paNoError) { goto error; }
 
-    err = Pa_StartStream(stream);
+    err = Pa_SetStreamFinishedCallback(*stream, callback_done);
     if (err != paNoError) { goto error; }
 
-    // TODO: set a stream-end callback
-    Pa_Sleep(200);
-
-    err = Pa_StopStream(stream);
+    err = Pa_StartStream(*stream);
     if (err != paNoError) { goto error; }
 
     return paNoError;
@@ -116,6 +124,9 @@ PaError display_devices() {
 }
 
 int main(int argc, char const *argv[]) {
+    context = zmq_ctx_new();
+    assert(context);
+
     PaError err;
 
     printf("Initializing PortAudio:\n");
@@ -126,15 +137,22 @@ int main(int argc, char const *argv[]) {
     err = display_devices();
     if (err != paNoError) { goto error; }
 
-    err = init_stream();
+    PaStream *stream;
+    err = init_stream(&stream);
     if (err != paNoError) { goto error; }
+
+    while (Pa_IsStreamActive(stream)) {
+        Pa_Sleep(500);
+    }
 
     err = Pa_Terminate();
     if (err != paNoError) { goto error; }
 
+    zmq_ctx_destroy(context);
     return 0;
 
     error:
+    zmq_ctx_destroy(context);
     Pa_Terminate();
     fprintf(stderr, "\nExiting due to an error.\n");
     fprintf(stderr, "Error number: %d\n", err);

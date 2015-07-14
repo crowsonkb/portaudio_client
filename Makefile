@@ -2,7 +2,8 @@
 CC = /usr/bin/clang
 CFLAGS = -Wall -std=gnu11 -O3
 CPATH = -I/usr/local/include
-LDFLAGS = -Wl,-L/usr/local/lib,-lportaudio
+LDFLAGS = -Wl,-L/usr/local/lib,-lportaudio,-lzmq
+
 CCFULL = $(CC) $(CFLAGS) $(CPATH) $(LDFLAGS)
 
 read_samples: read_samples.c
