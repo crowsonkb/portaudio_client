@@ -1,6 +1,6 @@
 # Config options peculiar to my system (OS X, portaudio in /usr/local)
 CC = /usr/bin/clang
-CFLAGS = -Wall -std=gnu99 -O3
+CFLAGS = -Wall -std=gnu11 -O3
 CPATH = -I/usr/local/include
 LDFLAGS = -Wl,-L/usr/local/lib,-lportaudio
 CCFULL = $(CC) $(CFLAGS) $(CPATH) $(LDFLAGS)
