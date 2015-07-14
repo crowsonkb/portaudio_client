@@ -1,11 +1,12 @@
 # Config options peculiar to my system (OS X, portaudio in /usr/local)
-CC = clang
-CFLAGS = -Wall -std=gnu99
+CC = /usr/bin/clang
+CFLAGS = -Wall -std=gnu99 -O3
 CPATH = -I/usr/local/include
 LDFLAGS = -Wl,-L/usr/local/lib,-lportaudio
+CCFULL = $(CC) $(CFLAGS) $(CPATH) $(LDFLAGS)
 
-read: read.c
-	$(CC) $(CFLAGS) $(CPATH) $(LDFLAGS) read.c -o read
+read_samples: read_samples.c
+	$(CCFULL) read_samples.c -o read_samples
 
 clean:
-	rm read
+	rm read_samples

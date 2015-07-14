@@ -1,3 +1,7 @@
+/*
+Reads samples from the OS X default audio device, with minimal latency. It uses portaudio (http://portaudio.com) as a simplified audio I/O library.
+*/
+
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,7 +23,7 @@ static int callback(const void *input_,
     const float *input = input_;
     int *count = userData_;
     if (!*count) {
-        printf("\nReading from the default input device...\n");
+        printf("\nReading %lu frames per callback...\n", frameCount);
     }
 
     double accum = 0;
@@ -126,6 +130,7 @@ int main(int argc, char const *argv[]) {
 
     err = Pa_Terminate();
     if (err != paNoError) { goto error; }
+
     return 0;
 
     error:
